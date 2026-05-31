@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+@layer base {
+  body {
+    @apply bg-background text-on-background font-body-base overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container antialiased;
+    background: radial-gradient(circle at 50% 50%, #1c1b1b 0%, #131313 100%);
+    background-size: 200% 200%;
+    animation: gradientMove 15s ease infinite;
+  }
+}
+
+/* Animations */
+@keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(5deg); }
+}
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+@keyframes drift {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(40px, -60px) scale(1.15); }
+    66% { transform: translate(-30px, 30px) scale(0.9); }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-blob { animation: drift 20s ease-in-out infinite; }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+.parallax-bg { transform-style: preserve-3d; perspective: 1000px; }
+.glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+
+/* Reveal Animation */
+.reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 3D Poster Effect */
+.poster-3d {
+    transition: transform 0.5s ease-out, box-shadow 0.5s ease-out;
+    transform-style: preserve-3d;
+}
+.poster-3d:hover {
+    transform: scale(1.05) rotateY(10deg) rotateX(5deg);
+    box-shadow: 20px 20px 60px rgba(0,0,0,0.5), 0 0 30px rgba(229, 9, 20, 0.4);
+}
+
+/* Ambient Background */
+.ambient-bg {
+    background: radial-gradient(circle at 50% 50%, #1c1b1b 0%, #131313 100%);
+    background-size: 200% 200%;
+    animation: gradientMove 15s ease infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #131313; }
+::-webkit-scrollbar-thumb { background: #474746; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #e50914; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .reveal, .poster-3d, .animate-float, .ambient-bg {
+        transition: none !important;
+        animation: none !important;
+        transform: none !important;
+        opacity: 1 !important;
+    }
+}
