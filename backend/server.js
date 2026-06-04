@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import authRoutes from './routes/authRoutes.js';
+
 import User from './models/User.js';
 
 // Load env vars
@@ -19,7 +19,25 @@ app.use(helmet());
 app.use(morgan('dev'));
 
 // Routes
+import authRoutes from './routes/authRoutes.js';
+import cinemaRoutes from './routes/cinemaRoutes.js';
+import theaterRoutes from './routes/theaterRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import movieRoutes from './routes/movieRoutes.js';
+import packageRoutes from './routes/packageRoutes.js';
+import showtimeRoutes from './routes/showtimeRoutes.js';
+import statsRoutes from './routes/statsRoutes.js';
+import bookingRoutes from './routes/bookingRoutes.js';
+
 app.use('/api/auth', authRoutes);
+app.use('/api/cinemas', cinemaRoutes);
+app.use('/api/theaters', theaterRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/movies', movieRoutes);
+app.use('/api/packages', packageRoutes);
+app.use('/api/showtimes', showtimeRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Test Route
 app.get('/', (req, res) => {

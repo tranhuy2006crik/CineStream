@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useLang } from '../context/LanguageContext';
+import { Loader2 } from 'lucide-react';
 
 const translations = {
   en: {
@@ -50,78 +52,92 @@ const translations = {
 export default function Pricing() {
   const { lang } = useLang();
   const t = translations[lang];
+  const [packages, setPackages] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await fetch('/api/packages?isActive=true');
+        const data = await res.json();
+        setPackages(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Lỗi khi tải danh sách gói cước:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPackages();
+  }, []);
+
   return (
     <section className="py-24 bg-background reveal">
       <div className="px-margin-mobile md:px-margin-desktop text-center mb-stack-lg">
         <h2 className="font-display-lg text-display-lg-mobile md:text-headline-md text-on-surface">{t.title}</h2>
         <p className="font-body-base text-on-surface-variant">{t.subtitle}</p>
       </div>
-      <div className="px-margin-mobile md:px-margin-desktop grid grid-cols-1 md:grid-cols-3 gap-gutter max-w-6xl mx-auto">
-        <div className="glass-card p-stack-lg rounded-2xl flex flex-col transition-all duration-300 hover:border-primary-container group">
-          <div className="mb-stack-md">
-            <h3 className="font-headline-md text-on-surface">{t.basic}</h3>
-            <p className="text-on-surface-variant text-body-sm">{t.basicDesc}</p>
-          </div>
-          <div className="mb-stack-lg">
-            <span className="text-4xl font-black text-on-surface">$9.99</span>
-            <span className="text-on-surface-variant">/mo</span>
-          </div>
-          <ul className="flex-grow space-y-4 mb-stack-lg">
-            <li className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.screen1}
-            </li>
-            <li className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.fhd}
-            </li>
-          </ul>
-          <button className="w-full py-3 rounded-lg border border-outline-variant text-on-surface font-label-bold group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-transparent transition-all">{t.selectBasic}</button>
+      
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="animate-spin text-primary-container" size={48} />
         </div>
-        <div className="relative p-stack-lg rounded-2xl flex flex-col bg-surface-container-high border-2 border-primary-container shadow-[0_0_40px_rgba(229,9,20,0.15)] group scale-105 z-10">
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary-container px-4 py-1 rounded-full text-label-bold whitespace-nowrap">{t.popular}</div>
-          <div className="mb-stack-md">
-            <h3 className="font-headline-md text-on-surface">{t.premium}</h3>
-            <p className="text-on-surface-variant text-body-sm">{t.premiumDesc}</p>
-          </div>
-          <div className="mb-stack-lg">
-            <span className="text-4xl font-black text-on-surface">$15.99</span>
-            <span className="text-on-surface-variant">/mo</span>
-          </div>
-          <ul className="flex-grow space-y-4 mb-stack-lg">
-            <li className="flex items-center gap-2 text-body-sm text-on-surface">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.screen2}
-            </li>
-            <li className="flex items-center gap-2 text-body-sm text-on-surface">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.ultra}
-            </li>
-            <li className="flex items-center gap-2 text-body-sm text-on-surface">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.sound}
-            </li>
-          </ul>
-          <button className="w-full py-3 rounded-lg bg-primary-container text-on-primary-container font-label-bold shadow-lg hover:shadow-primary-container/20 transition-all">{t.getPremium}</button>
+      ) : packages.length === 0 ? (
+        <div className="text-center text-on-surface-variant py-12">
+          Không có gói cước nào khả dụng lúc này.
         </div>
-        <div className="glass-card p-stack-lg rounded-2xl flex flex-col transition-all duration-300 hover:border-primary-container group">
-          <div className="mb-stack-md">
-            <h3 className="font-headline-md text-on-surface">{t.vip}</h3>
-            <p className="text-on-surface-variant text-body-sm">{t.vipDesc}</p>
-          </div>
-          <div className="mb-stack-lg">
-            <span className="text-4xl font-black text-on-surface">$24.99</span>
-            <span className="text-on-surface-variant">/mo</span>
-          </div>
-          <ul className="flex-grow space-y-4 mb-stack-lg">
-            <li className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.screen4}
-            </li>
-            <li className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.early}
-            </li>
-            <li className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-              <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> {t.noAds}
-            </li>
-          </ul>
-          <button className="w-full py-3 rounded-lg border border-outline-variant text-on-surface font-label-bold group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-transparent transition-all">{t.goVip}</button>
+      ) : (
+        <div className="px-margin-mobile md:px-margin-desktop grid grid-cols-1 md:grid-cols-3 gap-gutter max-w-6xl mx-auto items-center">
+          {packages.map((pkg, index) => {
+            const isPopular = pkg.isPopular;
+            
+            return (
+              <div 
+                key={pkg._id} 
+                className={`${
+                  isPopular 
+                    ? 'relative p-stack-lg rounded-2xl flex flex-col bg-surface-container-high border-2 border-primary-container shadow-[0_0_40px_rgba(229,9,20,0.15)] group scale-105 z-10' 
+                    : 'glass-card p-stack-lg rounded-2xl flex flex-col transition-all duration-300 hover:border-primary-container group'
+                }`}
+              >
+                {isPopular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary-container text-on-primary-container px-4 py-1 rounded-full text-label-bold whitespace-nowrap">
+                    {t.popular}
+                  </div>
+                )}
+                
+                <div className="mb-stack-md">
+                  <h3 className="font-headline-md text-on-surface">{pkg.name}</h3>
+                  <p className="text-on-surface-variant text-body-sm min-h-[40px]">{pkg.description}</p>
+                </div>
+                
+                <div className="mb-stack-lg">
+                  <span className="text-4xl font-black text-on-surface">${pkg.price}</span>
+                  <span className="text-on-surface-variant">/mo</span>
+                </div>
+                
+                <ul className="flex-grow space-y-4 mb-stack-lg">
+                  {pkg.features && pkg.features.map((feature, i) => (
+                    <li key={i} className={`flex items-center gap-2 text-body-sm ${isPopular ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                      <span className="material-symbols-outlined text-primary-container text-sm">check_circle</span> 
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                
+                <button 
+                  className={`w-full py-3 rounded-lg font-label-bold transition-all ${
+                    isPopular 
+                      ? 'bg-primary-container text-on-primary-container shadow-lg hover:shadow-primary-container/20 cursor-pointer' 
+                      : 'border border-outline-variant text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-transparent cursor-pointer'
+                  }`}
+                >
+                  Mua {pkg.name}
+                </button>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      )}
     </section>
   );
 }

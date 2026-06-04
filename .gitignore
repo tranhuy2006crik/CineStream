@@ -1,9 +1,46 @@
+# Dependencies
 node_modules/
-dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Config Files (BẢO MẬT TUYỆT ĐỐI)
 .env
 .env.local
 .env.*.local
-.DS_Store
+.env.development
+.env.production
+*.pem
+
+# Firebase Service Account (Rất quan trọng)
+serviceAccountKey.json
+backend/config/serviceAccountKey.json
+
+# Build Outputs
+dist/
+build/
+out/
+.next/
+
+# Logs & Temporary Files
 *.log
 coverage/
-build/
+.npm/
+tmp/
+temp/
+
+# Uploads & Media (Tránh push rác lên Github)
+uploads/
+backend/uploads/
+backend/public/images/
+
+# OS & IDE Settings
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

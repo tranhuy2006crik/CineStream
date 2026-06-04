@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
+import { auth, googleProvider, facebookProvider } from '../config/firebase';
+import { signInWithPopup } from 'firebase/auth';
 
 const translations = {
   en: {
@@ -75,6 +77,62 @@ const translations = {
   },
 };
 
+// Reusable floating-label input — label sits ON the border when active
+const FloatingInput = ({ id, label, type = 'text', value, onChange, required = true }) => {
+  const [focused, setFocused] = useState(false);
+  const isActive = focused || (value && value.length > 0);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        id={id}
+        name={id}
+        placeholder=" "
+        required={required}
+        type={type}
+        value={value}
+        onChange={onChange}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        autoComplete={type === 'password' ? 'current-password' : 'email'}
+        style={{
+          width: '100%',
+          backgroundColor: 'transparent',
+          borderRadius: '8px',
+          padding: '16px 16px 16px 16px',
+          fontSize: '16px',
+          lineHeight: '1.5',
+          color: '#e5e2e1',
+          outline: 'none',
+          border: focused ? '2px solid #e50914' : '2px solid rgba(255,255,255,0.2)',
+          transition: 'all 0.2s ease',
+          fontFamily: 'Inter, sans-serif',
+        }}
+      />
+      <label
+        htmlFor={id}
+        style={{
+          position: 'absolute',
+          left: '12px',
+          top: isActive ? '-9px' : '50%',
+          transform: isActive ? 'translateY(0)' : 'translateY(-50%)',
+          fontSize: isActive ? '12px' : '15px',
+          color: focused ? '#e50914' : isActive ? '#e5e2e1' : '#a09e9d',
+          fontWeight: isActive ? '600' : '400',
+          transition: 'all 0.2s ease',
+          pointerEvents: 'none',
+          fontFamily: 'Inter, sans-serif',
+          backgroundColor: isActive ? 'rgba(0,0,0,0.9)' : 'transparent',
+          padding: isActive ? '0 6px' : '0',
+          borderRadius: '4px',
+        }}
+      >
+        {label}
+      </label>
+    </div>
+  );
+};
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -86,7 +144,6 @@ export default function Login() {
 
   // Film-reel transition state
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [pendingMode, setPendingMode] = useState(null);
 
   const t = translations[lang];
   
@@ -100,38 +157,104 @@ export default function Login() {
   const [newProfileName, setNewProfileName] = useState('');
   
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleSocialLogin = async (provider) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
+
+      // Send token to backend
+      const response = await fetch('http://localhost:5000/api/auth/social-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data));
+        
+        if (data.profiles && data.profiles.length > 0) {
+          localStorage.setItem('activeProfile', JSON.stringify(data.profiles[0]));
+        } else {
+          // Fallback profile if none returned
+          localStorage.setItem('activeProfile', JSON.stringify({ name: data.email.split('@')[0], avatar: 'https://via.placeholder.com/150' }));
+        }
+
+        const from = location.state?.from?.pathname || "/";
+        navigate(from, { replace: true });
+      } else {
+        setError(data.message || 'Login failed');
+      }
+    } catch (err) {
+      console.error("Social login error:", err);
+      setError(err.message || 'An error occurred during social login.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // If already logged in and active profile exists, redirect to home
   useEffect(() => {
+    // If navigation state forces login (e.g. clicking 'Sign In' from Navbar explicitly)
+    if (location.state?.forceLogin) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('activeProfile');
+      // Clear state so a refresh doesn't keep clearing
+      window.history.replaceState({}, document.title);
+      return;
+    }
+
     const token = localStorage.getItem('token');
     const activeProfile = localStorage.getItem('activeProfile');
-    if (token && activeProfile) {
-      navigate('/');
-    } else if (token) {
-      const storedUser = JSON.parse(localStorage.getItem('user'));
-      if (storedUser) {
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    
+    if (token && storedUser) {
+      if (storedUser.role === 'admin' || storedUser.role === 'staff') {
+        navigate('/admin');
+      } else if (activeProfile) {
+        navigate('/');
+      } else {
         setUser(storedUser);
         setProfiles(storedUser.profiles || []);
         setShowProfiles(true);
       }
     }
-  }, [navigate]);
+  }, [navigate, location.state]);
 
   // Film-reel transition handler
   const handleModeSwitch = () => {
     setIsTransitioning(true);
-    setPendingMode(!isSignUp);
-    // After fade-out completes, switch mode and fade back in
+    // Wait until the screen is fully black (500ms)
     setTimeout(() => {
       setIsSignUp(prev => !prev);
       setEmail('');
       setPassword('');
       setConfirmPassword('');
       setError('');
+      // Keep it black for another 150ms to read CINESTREAM
       setTimeout(() => {
         setIsTransitioning(false);
-        setPendingMode(null);
-      }, 50);
+      }, 150);
+    }, 500);
+  };
+
+  const handleLangSwitch = () => {
+    setIsTransitioning(true);
+    // Wait until the screen is fully black (500ms)
+    setTimeout(() => {
+      toggleLang();
+      // Keep it black for another 150ms to read CINESTREAM
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 150);
     }, 500);
   };
 
@@ -165,11 +288,16 @@ export default function Login() {
       }
 
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({ _id: data._id, email: data.email, profiles: data.profiles }));
+      localStorage.setItem('user', JSON.stringify({ _id: data._id, email: data.email, role: data.role, profiles: data.profiles }));
       
       setUser(data);
-      setProfiles(data.profiles || []);
-      setShowProfiles(true);
+      
+      if (data.role === 'admin' || data.role === 'staff') {
+        navigate('/admin');
+      } else {
+        setProfiles(data.profiles || []);
+        setShowProfiles(true);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -227,64 +355,10 @@ export default function Login() {
     }
   };
 
-  // Reusable floating-label input — label sits ON the border when active
-  const FloatingInput = ({ id, label, type = 'text', value, onChange, required = true }) => {
-    const [focused, setFocused] = useState(false);
-    const isActive = focused || (value && value.length > 0);
 
-    return (
-      <div style={{ position: 'relative' }}>
-        <input
-          id={id}
-          name={id}
-          placeholder=" "
-          required={required}
-          type={type}
-          value={value}
-          onChange={onChange}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          autoComplete={type === 'password' ? 'current-password' : 'email'}
-          style={{
-            width: '100%',
-            backgroundColor: 'transparent',
-            borderRadius: '8px',
-            padding: '16px 16px 16px 16px',
-            fontSize: '16px',
-            lineHeight: '1.5',
-            color: '#e5e2e1',
-            outline: 'none',
-            border: focused ? '2px solid #e50914' : '2px solid rgba(255,255,255,0.2)',
-            transition: 'all 0.2s ease',
-            fontFamily: 'Inter, sans-serif',
-          }}
-        />
-        <label
-          htmlFor={id}
-          style={{
-            position: 'absolute',
-            left: '12px',
-            top: isActive ? '-9px' : '50%',
-            transform: isActive ? 'translateY(0)' : 'translateY(-50%)',
-            fontSize: isActive ? '12px' : '15px',
-            color: focused ? '#e50914' : isActive ? '#e5e2e1' : '#a09e9d',
-            fontWeight: isActive ? '600' : '400',
-            transition: 'all 0.2s ease',
-            pointerEvents: 'none',
-            fontFamily: 'Inter, sans-serif',
-            backgroundColor: isActive ? 'rgba(0,0,0,0.9)' : 'transparent',
-            padding: isActive ? '0 6px' : '0',
-            borderRadius: '4px',
-          }}
-        >
-          {label}
-        </label>
-      </div>
-    );
-  };
 
   return (
-    <div className="bg-background text-on-surface font-body-base min-h-screen relative flex flex-col antialiased selection:bg-primary-container selection:text-white">
+    <div className="bg-background text-on-surface font-body-base min-h-[100dvh] h-[100dvh] overflow-y-auto overflow-x-hidden relative flex flex-col antialiased selection:bg-primary-container selection:text-white">
       {/* Background — Movie Poster Grid with cinematic overlay */}
       <div className="fixed inset-0 z-0">
         <img
@@ -299,17 +373,45 @@ export default function Login() {
         ></div>
       </div>
 
-      {/* Film-reel transition overlay */}
+      {/* Cinematic Film-Reel Overlay */}
       <div
-        className={`fixed inset-0 z-[100] bg-black pointer-events-none transition-opacity duration-500 ease-in-out ${
-          isTransitioning ? 'opacity-80' : 'opacity-0'
+        className={`fixed inset-0 z-[100] bg-black pointer-events-none transition-opacity ease-in-out duration-500 ${
+          isTransitioning ? 'opacity-100' : 'opacity-0'
         }`}
         style={{
           backgroundImage: isTransitioning
-            ? 'repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(255,255,255,0.03) 4px, rgba(255,255,255,0.03) 5px)'
+            ? 'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.04) 3px, rgba(255,255,255,0.04) 4px)'
             : 'none',
         }}
-      ></div>
+      >
+        {isTransitioning && (
+          <>
+            <div style={{
+              position: 'absolute', left: '20px', top: 0, bottom: 0, width: '30px',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '20px', alignItems: 'center',
+            }}>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={`l${i}`} style={{ width: '16px', height: '10px', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.03)' }} />
+              ))}
+            </div>
+            <div style={{
+              position: 'absolute', right: '20px', top: 0, bottom: 0, width: '30px',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '20px', alignItems: 'center',
+            }}>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={`r${i}`} style={{ width: '16px', height: '10px', borderRadius: '3px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.03)' }} />
+              ))}
+            </div>
+            <div style={{
+              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              color: 'rgba(229, 9, 20, 0.8)', fontSize: '14px', fontFamily: 'Inter, sans-serif', fontWeight: '700',
+              letterSpacing: '4px', textTransform: 'uppercase', animation: 'pulse 1s ease-in-out infinite',
+            }}>
+              CINESTREAM
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Header */}
       <header className="relative z-20 w-full px-4 sm:px-8 md:px-16 py-6">
@@ -323,7 +425,7 @@ export default function Login() {
           </a>
           {/* Language Toggle Globe */}
           <button
-            onClick={toggleLang}
+            onClick={handleLangSwitch}
             className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 bg-black/40 backdrop-blur-md hover:bg-white/10 transition-all duration-300 cursor-pointer group"
             title={lang === 'en' ? 'Chuyển sang Tiếng Việt' : 'Switch to English'}
           >
@@ -340,14 +442,14 @@ export default function Login() {
         {!showProfiles ? (
           /* Auth Box — Glassmorphic */
           <div
-            className={`w-full max-w-[450px] bg-black/75 backdrop-blur-xl rounded-xl p-8 md:p-16 border border-red-500/20 transition-all duration-500 ease-out hover:border-red-500/30 ${
-              isTransitioning ? 'scale-95 blur-sm opacity-30' : 'scale-100 blur-0 opacity-100'
+            className={`w-full max-w-[450px] bg-black/75 backdrop-blur-xl rounded-xl p-6 sm:p-8 md:p-10 border border-red-500/20 transition-all ease-out hover:border-red-500/30 my-auto duration-500 ${
+              isTransitioning ? 'scale-95 blur-md opacity-0' : 'scale-100 blur-0 opacity-100'
             }`}
             style={{
               boxShadow: '0 0 30px rgba(229, 9, 20, 0.25), 0 0 60px rgba(229, 9, 20, 0.12), 0 0 120px rgba(229, 9, 20, 0.06), 0 8px 32px rgba(0,0,0,0.5)'
             }}
           >
-            <h1 className="font-display-lg-mobile text-display-lg-mobile text-on-surface mb-8 font-bold">
+            <h1 className="font-display-lg-mobile text-display-lg-mobile text-on-surface mb-6 font-bold">
               {isSignUp ? t.signUp : t.signIn}
             </h1>
 
@@ -407,7 +509,7 @@ export default function Login() {
             </form>
 
             {/* Divider */}
-            <div className="mt-8 mb-6 flex items-center justify-between">
+            <div className="my-6 flex items-center justify-between">
               <hr className="w-full border-surface-bright" />
               <span className="px-4 text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold whitespace-nowrap">{t.or}</span>
               <hr className="w-full border-surface-bright" />
@@ -415,16 +517,26 @@ export default function Login() {
 
             {/* Social Buttons */}
             <div className="flex flex-col gap-3">
-              <button className="w-full flex items-center justify-center gap-3 py-3 bg-white/10 hover:bg-white/20 text-on-surface font-body-base text-body-base rounded-lg transition-colors border border-transparent hover:border-white/20 cursor-pointer" type="button">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"></path>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+              <button 
+                type="button" 
+                onClick={() => handleSocialLogin(googleProvider)}
+                disabled={loading}
+                className="w-full flex items-center justify-center space-x-2 bg-white/10 hover:bg-white/20 text-on-surface p-3 rounded-[4px] font-semibold transition-colors disabled:opacity-50"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
                 <span>{t.continueGoogle}</span>
               </button>
-              <button className="w-full flex items-center justify-center gap-3 py-3 bg-white/10 hover:bg-white/20 text-on-surface font-body-base text-body-base rounded-lg transition-colors border border-transparent hover:border-white/20 cursor-pointer" type="button">
+              <button 
+                type="button" 
+                onClick={() => handleSocialLogin(facebookProvider)}
+                disabled={loading}
+                className="w-full flex items-center justify-center space-x-2 bg-white/10 hover:bg-white/20 text-on-surface p-3 rounded-[4px] font-semibold transition-colors disabled:opacity-50"
+              >
                 <svg className="w-5 h-5 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"></path>
                 </svg>
@@ -442,7 +554,7 @@ export default function Login() {
             </div>
 
             {/* Footer Link */}
-            <div className="mt-10 pt-6 border-t border-white/5 text-center">
+            <div className="mt-4 pt-4 border-t border-white/5 text-center">
               <p className="font-body-base text-sm text-on-surface-variant">
                 {isSignUp ? t.alreadyHaveAccount : t.newToCinestream}
                 <button
@@ -501,7 +613,7 @@ export default function Login() {
                 </button>
               ))}
 
-              {!isAddingProfile ? (
+              {!isAddingProfile && profiles.length < 5 ? (
                 <button 
                   className="group flex flex-col items-center focus:outline-none cursor-pointer" 
                   onClick={() => setIsAddingProfile(true)}
@@ -515,7 +627,7 @@ export default function Login() {
                     {t.addProfile}
                   </span>
                 </button>
-              ) : (
+              ) : isAddingProfile ? (
                 <form onSubmit={handleAddProfile} className="flex flex-col items-center justify-center p-6 bg-surface-container rounded-2xl border border-white/10 w-full max-w-[300px] shadow-2xl">
                   <h3 className="text-base font-bold text-on-surface mb-3.5">{t.newProfile}</h3>
                   <input 
@@ -543,7 +655,7 @@ export default function Login() {
                     </button>
                   </div>
                 </form>
-              )}
+              ) : null}
             </div>
           </div>
         )}
@@ -553,7 +665,7 @@ export default function Login() {
       <div className="fixed bottom-0 left-0 right-0 h-32 bg-primary-container/5 blur-3xl z-0 pointer-events-none"></div>
 
       {/* Footer */}
-      <footer className="w-full py-8 sm:py-12 mt-auto bg-black/60 backdrop-blur-md border-t border-white/5 relative z-10 shrink-0 text-sm">
+      <footer className="hidden md:block w-full py-6 mt-auto bg-black/60 backdrop-blur-md border-t border-white/5 relative z-10 shrink-0 text-sm">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-4 sm:px-8 md:px-16 max-w-[1440px] mx-auto text-on-surface-variant">
           <div className="col-span-2 md:col-span-4 mb-2">
             <p className="font-body-base text-base mb-1">{t.callUs}</p>

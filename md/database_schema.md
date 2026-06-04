@@ -63,6 +63,11 @@ Quản lý thông tin cụm rạp. Sử dụng GeoJSON để tìm rạp gần nh
 | `address` | String | Yes | Địa chỉ chi tiết |
 | `location` | Object | Yes | Tọa độ GeoJSON `{ type: "Point", coordinates: [lng, lat] }` |
 | `hotline` | String | Yes | Số điện thoại liên hệ rạp |
+| `region` | String | Yes | Khu vực/Thành phố (VD: Hà Nội, TP.HCM) |
+| `images` | Array[String]| No | Mảng URL hình ảnh giới thiệu không gian rạp |
+| `facilities` | Array[String]| No | Tiện ích đi kèm (VD: `['Wifi', 'Parking']`) |
+| `status` | String | Yes | Trạng thái: `Active`, `Maintenance`, `Closed` |
+| `description` | String | No | Đoạn giới thiệu mô tả về rạp |
 
 ### 💺 2.4. Theater Collection (`theaters`)
 Quản lý các phòng chiếu thuộc một rạp. Tích hợp sẵn sơ đồ ghế.
@@ -72,6 +77,7 @@ Quản lý các phòng chiếu thuộc một rạp. Tích hợp sẵn sơ đồ 
 | `_id` | ObjectId | Yes | ID phòng chiếu |
 | `cinemaId` | ObjectId | Yes | Reference tới `cinemas` |
 | `name` | String | Yes | Tên phòng (VD: Phòng 1, IMAX 2) |
+| `theaterType` | String | Yes | Loại phòng chiếu (VD: `Standard`, `IMAX`, `4DX`) |
 | `seatLayout`| Array[Object]| Yes | Sơ đồ ma trận ghế. VD: `[{ row: "A", seats: [{ col: 1, type: "normal", status: "active" }] }]` |
 
 ### 📅 2.5. Showtime Collection (`showtimes`)

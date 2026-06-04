@@ -25,6 +25,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  role: {
+    type: String,
+    enum: ['user', 'staff', 'admin'],
+    default: 'user'
+  },
+  cinemaId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Cinema',
+    default: null
+  },
   profiles: {
     type: [profileSchema],
     default: [

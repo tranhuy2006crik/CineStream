@@ -31,12 +31,12 @@ export default function PageTransition({ children }) {
     return () => clearTimeout(fadeOutTimer);
   }, [location.pathname, children]);
 
-  // Update children immediately if location hasn't changed (re-renders)
+  // Update children immediately if location hasn't changed (e.g. local state updates)
   useEffect(() => {
-    if (!isTransitioning) {
+    if (prevLocation.current === location.pathname && !isTransitioning) {
       setDisplayChildren(children);
     }
-  }, [children, isTransitioning]);
+  }, [children, location.pathname, isTransitioning]);
 
   return (
     <>

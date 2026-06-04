@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { verifyIdToken } from '../config/firebaseAdmin.js';
+import crypto from 'crypto';
 
 // Generate token helper
 const generateToken = (id) => {
@@ -33,6 +35,8 @@ export const register = async (req, res) => {
       return res.status(201).json({
         _id: user._id,
         email: user.email,
+        role: user.role,
+        cinemaId: user.cinemaId,
         profiles: user.profiles,
         token: generateToken(user._id),
       });
@@ -62,6 +66,8 @@ export const login = async (req, res) => {
       return res.json({
         _id: user._id,
         email: user.email,
+        role: user.role,
+        cinemaId: user.cinemaId,
         profiles: user.profiles,
         token: generateToken(user._id),
       });
@@ -107,6 +113,10 @@ export const createProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    if (user.profiles.length >= 5) {
+      return res.status(400).json({ message: 'Maximum 5 profiles allowed' });
+    }
     
     user.profiles.push({ name, avatar });
     await user.save();
@@ -115,5 +125,56 @@ export const createProfile = async (req, res) => {
   } catch (error) {
     console.error('Create profile error:', error.message);
     return res.status(500).json({ message: 'Server error creating profile' });
+  }
+};
+
+// @desc    Social Login (Google/Facebook via Firebase)
+// @route   POST /api/auth/social-login
+// @access  Public
+export const socialLogin = async (req, res) => {
+  const { idToken } = req.body;
+  
+  if (!idToken) {
+    return res.status(400).json({ message: 'Token is required' });
+  }
+
+  try {
+    const decodedToken = await verifyIdToken(idToken);
+    const { email, name, picture } = decodedToken;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required from social provider' });
+    }
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      const randomPassword = crypto.randomBytes(16).toString('hex');
+      
+      const newProfile = {
+        name: name || email.split('@')[0],
+        avatar: picture || 'https://via.placeholder.com/150',
+      };
+
+      user = await User.create({
+        email,
+        password: randomPassword,
+        role: 'user', 
+        profiles: [newProfile]
+      });
+    }
+
+    return res.json({
+      _id: user._id,
+      email: user.email,
+      role: user.role,
+      cinemaId: user.cinemaId,
+      profiles: user.profiles,
+      token: generateToken(user._id),
+    });
+
+  } catch (error) {
+    console.error('Social login error:', error.message);
+    return res.status(401).json({ message: error.message || 'Invalid social token' });
   }
 };

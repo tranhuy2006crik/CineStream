@@ -25,16 +25,28 @@ const translations = {
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeProfile, setActiveProfile] = useState(null);
   const dropdownRef = useRef(null);
+  const lastScrollY = useRef(0);
   const navigate = useNavigate();
   const { lang, toggleLang } = useLang();
   const t = translations[lang];
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      setScrolled(currentScrollY > 50);
+      
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setHidden(true);
+      } else if (currentScrollY < lastScrollY.current) {
+        setHidden(false);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     // Load active profile from storage
     const profile = localStorage.getItem('activeProfile');
@@ -69,7 +81,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className={`fixed top-0 w-full z-50 backdrop-blur-md transition-all duration-300 ease-in-out ${scrolled ? 'py-2 bg-background/95 border-b border-white/5' : 'py-4 bg-background/80'}`}>
+    <nav id="main-navbar" className={`fixed top-0 w-full z-50 backdrop-blur-md transition-all duration-300 ease-in-out ${hidden ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'py-2 bg-background/95 border-b border-white/5' : 'py-4 bg-background/80'}`}>
       <div className="flex justify-between items-center px-margin-mobile md:px-margin-desktop w-full max-w-container-max mx-auto">
         <Link to="/" className="font-display-lg text-display-lg-mobile md:text-display-lg font-black text-primary-container uppercase tracking-tighter hover:scale-105 transition-transform duration-300 cursor-pointer">
           CINESTREAM
