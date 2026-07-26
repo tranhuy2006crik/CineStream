@@ -102,3 +102,72 @@ export const unassignCinema = async (req, res) => {
     res.status(500).json({ message: 'Lỗi server' });
   }
 };
+
+// @route   PUT /api/users/:userId
+// @desc    Update user (email, role, profile name, cinemaId, optional password)
+// @access  Private/Admin
+export const updateUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name, email, role, cinemaId, password } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy user' });
+
+    if (email !== undefined && email !== user.email) {
+      const emailExists = await User.findOne({ email, _id: { $ne: userId } });
+      if (emailExists) return res.status(400).json({ message: 'Email đã tồn tại' });
+      user.email = email;
+    }
+
+    if (role !== undefined) {
+      if (!['user', 'staff', 'admin'].includes(role)) {
+        return res.status(400).json({ message: 'Role không hợp lệ' });
+      }
+      user.role = role;
+    }
+
+    if (cinemaId !== undefined) {
+      user.cinemaId = cinemaId || null;
+    }
+
+    if (name !== undefined && user.profiles && user.profiles.length > 0) {
+      user.profiles[0].name = name;
+    }
+
+    if (password && password.trim() !== '') {
+      user.password = password;
+    }
+
+    await user.save();
+
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.password;
+    res.json(userWithoutPassword);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi server khi cập nhật user' });
+  }
+};
+
+// @route   DELETE /api/users/:userId
+// @desc    Delete a user (cannot delete self)
+// @access  Private/Admin
+export const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (String(req.user.id) === String(userId)) {
+      return res.status(400).json({ message: 'Không thể xóa chính mình' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy user' });
+
+    await user.deleteOne();
+    res.json({ message: 'Xóa user thành công', _id: userId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Lỗi server khi xóa user' });
+  }
+};

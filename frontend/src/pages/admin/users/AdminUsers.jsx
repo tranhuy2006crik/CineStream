@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Shield, User as UserIcon, Building2 } from 'lucide-react';
+import { Plus, Search, Shield, User as UserIcon, Building2, Edit2, Trash2, X } from 'lucide-react';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [showAddUser, setShowAddUser] = useState(false);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  const [editingId, setEditingId] = useState(null);
   
   const [cinemas, setCinemas] = useState([]);
   const [filterCinema, setFilterCinema] = useState('all');
@@ -14,10 +15,14 @@ export default function AdminUsers() {
     name: '',
     email: '',
     password: '',
-    role: 'staff' // Default when creating from admin
+    role: 'staff',
+    cinemaId: ''
   });
 
-
+  const resetForm = () => {
+    setFormData({ name: '', email: '', password: '', role: 'staff', cinemaId: '' });
+    setEditingId(null);
+  };
 
   const fetchCinemas = async () => {
     try {
@@ -55,25 +60,66 @@ export default function AdminUsers() {
     fetchCinemas();
   }, [filterRole]);
 
-  const handleCreateUser = async (e) => {
+  const handleEdit = (user) => {
+    setEditingId(user._id);
+    setFormData({
+      name: user.profiles?.[0]?.name || '',
+      email: user.email,
+      password: '',
+      role: user.role,
+      cinemaId: user.cinemaId?._id || ''
+    });
+    setShowAddUser(true);
+  };
+
+  const handleDelete = async (userId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        alert(data.message || 'Lỗi khi xóa user');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmitUser = async (e) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/users', {
-        method: 'POST',
+      const isEdit = !!editingId;
+      const url = isEdit 
+        ? `http://localhost:5000/api/users/${editingId}` 
+        : 'http://localhost:5000/api/users';
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const payload = { ...formData };
+      if (isEdit && !payload.password) delete payload.password;
+      if (!payload.cinemaId) payload.cinemaId = null;
+
+      const res = await fetch(url, {
+        method,
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         fetchUsers();
         setShowAddUser(false);
-        setFormData({ name: '', email: '', password: '', role: 'staff' });
+        resetForm();
       } else {
         const data = await res.json();
-        alert(data.message || 'Error creating user');
+        alert(data.message || (isEdit ? 'Lỗi khi cập nhật user' : 'Lỗi khi tạo user'));
       }
     } catch (err) {
       console.error(err);
@@ -94,7 +140,10 @@ export default function AdminUsers() {
           <p className="text-on-surface-variant mt-1">Manage system accounts and access roles.</p>
         </div>
         <button 
-          onClick={() => setShowAddUser(true)}
+          onClick={() => {
+            resetForm();
+            setShowAddUser(true);
+          }}
           className="bg-primary-container text-white px-5 py-2.5 rounded-xl font-bold hover:bg-primary-container/80 transition-all flex items-center gap-2 shadow-lg hover:shadow-primary-container/50"
         >
           <Plus size={20} /> Add Account
@@ -190,7 +239,22 @@ export default function AdminUsers() {
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <button className="text-sm text-primary-container hover:text-white transition-colors">Edit</button>
+                    <div className="flex justify-end space-x-2">
+                      <button 
+                        onClick={() => handleEdit(user)}
+                        className="p-2 bg-black/30 hover:bg-white/10 rounded-lg text-blue-400 transition-colors cursor-pointer" 
+                        title="Edit"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(user._id)}
+                        className="p-2 bg-black/30 hover:bg-red-500/20 rounded-lg text-primary-container transition-colors cursor-pointer" 
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -206,10 +270,17 @@ export default function AdminUsers() {
 
       {showAddUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <form onSubmit={handleCreateUser} className="bg-surface-container-high rounded-3xl border border-white/10 w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-white/5">
-              <h2 className="text-2xl font-bold text-on-surface">Add Account</h2>
-              <p className="text-sm text-on-surface-variant mt-1">Create a new staff or admin account.</p>
+          <form onSubmit={handleSubmitUser} className="bg-surface-container-high rounded-3xl border border-white/10 w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-on-surface">{editingId ? 'Edit Account' : 'Add Account'}</h2>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  {editingId ? 'Update account details and role assignment.' : 'Create a new staff or admin account.'}
+                </p>
+              </div>
+              <button type="button" onClick={() => { setShowAddUser(false); resetForm(); }} className="p-2 text-on-surface-variant hover:text-on-surface hover:bg-white/5 rounded-full transition-colors">
+                <X size={20} />
+              </button>
             </div>
             
             <div className="p-6 space-y-4">
@@ -230,11 +301,16 @@ export default function AdminUsers() {
                 />
               </div>
               <div>
-                <label className="text-sm text-on-surface-variant mb-1 block">Temporary Password</label>
+                <label className="text-sm text-on-surface-variant mb-1 block">
+                  {editingId ? 'New Password (bỏ trống nếu không đổi)' : 'Temporary Password'}
+                </label>
                 <input 
-                  type="password" required
-                  value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
+                  type="password" 
+                  required={!editingId}
+                  value={formData.password} 
+                  onChange={e => setFormData({...formData, password: e.target.value})}
                   className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-on-surface outline-none focus:border-primary-container"
+                  placeholder={editingId ? 'Để trống nếu giữ nguyên mật khẩu cũ' : ''}
                 />
               </div>
               <div>
@@ -248,14 +324,27 @@ export default function AdminUsers() {
                   <option value="user" className="bg-surface-container">Regular User</option>
                 </select>
               </div>
+              <div>
+                <label className="text-sm text-on-surface-variant mb-1 block">Assigned Cinema (optional)</label>
+                <select 
+                  value={formData.cinemaId} 
+                  onChange={e => setFormData({...formData, cinemaId: e.target.value})}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-on-surface outline-none focus:border-primary-container appearance-none"
+                >
+                  <option value="" className="bg-surface-container">— Not Assigned —</option>
+                  {cinemas.map(c => (
+                    <option key={c._id} value={c._id} className="bg-surface-container">{c.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="p-6 border-t border-white/5 bg-black/20 flex justify-end gap-3">
-              <button type="button" onClick={() => setShowAddUser(false)} className="px-5 py-2.5 rounded-xl font-bold text-on-surface-variant hover:bg-white/5 transition-colors">
+              <button type="button" onClick={() => { setShowAddUser(false); resetForm(); }} className="px-5 py-2.5 rounded-xl font-bold text-on-surface-variant hover:bg-white/5 transition-colors">
                 Cancel
               </button>
               <button type="submit" className="px-5 py-2.5 rounded-xl font-bold bg-primary-container text-white hover:bg-primary-container/80 transition-all shadow-lg">
-                Create Account
+                {editingId ? 'Update Account' : 'Create Account'}
               </button>
             </div>
           </form>

@@ -22,9 +22,8 @@ export default function VODReel() {
     fetch('/api/movies?status=VOD')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          setMovies(data);
-        }
+        const list = Array.isArray(data) ? data : (data.movies || []);
+        setMovies(list);
       })
       .catch(err => console.error('Error fetching VOD movies:', err));
   }, []);
@@ -32,7 +31,7 @@ export default function VODReel() {
   if (movies.length === 0) return null;
 
   return (
-    <section className="py-stack-lg bg-background overflow-hidden reveal">
+    <section className="py-stack-lg bg-background overflow-hidden animate-fade-in">
       <div className="px-margin-mobile md:px-margin-desktop mb-stack-md">
         <h2 className="font-headline-md text-headline-md text-on-surface border-l-4 border-tertiary pl-4">{t.vodTitle}</h2>
       </div>
@@ -43,7 +42,13 @@ export default function VODReel() {
               <img 
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                 src={movie.backdrop || movie.poster || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"} 
-                alt={movie.title} 
+                alt={movie.title}
+                onError={(e) => {
+                  const fallback = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80";
+                  if (e.currentTarget.src !== fallback) {
+                    e.currentTarget.src = fallback;
+                  }
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 group-hover:opacity-90 transition-opacity duration-500"></div>
               

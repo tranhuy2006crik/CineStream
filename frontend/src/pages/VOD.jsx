@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { Loader2 } from 'lucide-react';
 
 export default function VOD() {
+  const navigate = useNavigate();
   const [movies, setMovies] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    fetch('/api/movies?status=VOD')
+    fetch('/api/movies?status=VOD&limit=50')
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          setMovies(data);
-        }
+        const list = Array.isArray(data) ? data : (data.movies || []);
+        setMovies(list);
       })
       .catch(err => console.error('Error fetching VOD movies:', err))
       .finally(() => setIsLoading(false));
@@ -54,11 +55,18 @@ export default function VOD() {
                   {heroMovie.description || "The most anticipated thriller of the year is now available to rent. Experience the magic of cinema right from your living room."}
                 </p>
                 <div className="flex flex-wrap items-center gap-4 mt-2">
-                  <button className="bg-primary-container text-white font-headline-md text-base px-8 py-3 rounded hover:brightness-110 transition-colors flex items-center gap-2 cursor-pointer">
+                  <button onClick={() => navigate(`/vod/${heroMovie._id}`)}
+                    className="bg-primary-container text-white font-headline-md text-base px-8 py-3 rounded hover:brightness-110 transition-colors flex items-center gap-2 cursor-pointer">
                     <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
-                    Rent Now {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(heroMovie.price || 50000)}
+                    Rent Now {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(heroMovie.rentalPrice || heroMovie.price || 50000)}
                   </button>
-                  <button className="bg-white/10 text-white font-headline-md text-base px-8 py-3 rounded hover:bg-white/20 transition-colors flex items-center gap-2 backdrop-blur-sm border border-white/10 cursor-pointer">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (heroMovie.trailerUrl) { window.open?.(heroMovie.trailerUrl, '_blank', 'noopener'); return; }
+                      navigate(`/vod/${heroMovie._id}`);
+                    }}
+                    className="bg-white/10 text-white font-headline-md text-base px-8 py-3 rounded hover:bg-white/20 transition-colors flex items-center gap-2 backdrop-blur-sm border border-white/10 cursor-pointer">
                     <span className="material-symbols-outlined">movie</span>
                     Watch Trailer
                   </button>
@@ -110,7 +118,9 @@ export default function VOD() {
               ))
             ) : listMovies.length > 0 ? (
               listMovies.map(movie => (
-                <div key={movie._id} className="group relative flex-none w-[160px] md:w-[220px] aspect-[2/3] rounded-lg overflow-hidden bg-surface-container hover:scale-105 transition-transform duration-300 ease-in-out cursor-pointer shadow-none hover:shadow-[0_0_20px_rgba(229,9,20,0.3)] snap-start">
+                <div key={movie._id} 
+                  onClick={() => navigate(`/vod/${movie._id}`)}
+                  className="group relative flex-none w-[160px] md:w-[220px] aspect-[2/3] rounded-lg overflow-hidden bg-surface-container hover:scale-105 transition-transform duration-300 ease-in-out cursor-pointer shadow-none hover:shadow-[0_0_20px_rgba(229,9,20,0.3)] snap-start">
                   <img 
                     alt={movie.title} 
                     className="w-full h-full object-cover" 
@@ -119,17 +129,18 @@ export default function VOD() {
                   {/* Scrim & Metadata */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-300"></div>
                   <div className="absolute top-2 left-2 bg-primary-container text-white font-label-bold text-[10px] px-1.5 py-0.5 rounded shadow-sm">VOD</div>
-                  <div className="absolute top-2 right-2 bg-surface-dim/80 backdrop-blur-sm text-on-surface border border-outline-variant font-label-bold text-[10px] px-1.5 py-0.5 rounded">4K HDR</div>
+                  <div className="absolute top-2 right-2 bg-surface-dim/80 backdrop-blur-sm text-on-surface border border-outline-variant font-label-bold text-[10px] px-1.5 py-0.5 rounded">{movie.vodTier === 'exclusive' ? '4K HDR' : 'HD'}</div>
                   <div className="absolute bottom-0 left-0 w-full p-3 flex flex-col gap-1 translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
                     <h3 className="font-headline-md text-base text-on-surface truncate font-bold">{movie.title}</h3>
                     <div className="flex items-center gap-2 text-on-surface-variant font-body-sm text-[12px]">
                       <span className="flex items-center text-yellow-500">
-                        <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span> 7.8
+                        <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span> {movie.averageRating || movie.rating || '7.8'}
                       </span>
-                      <span>2024</span>
+                      <span>{movie.releaseYear || '2024'}</span>
                     </div>
-                    <button className="mt-2 w-full bg-primary-container/90 hover:bg-primary-container text-white font-label-bold text-[12px] py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 uppercase cursor-pointer">
-                      Rent {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(movie.price || 50000)}
+                    <button onClick={e => { e.stopPropagation(); navigate(`/vod/${movie._id}`); }}
+                      className="mt-2 w-full bg-primary-container/90 hover:bg-primary-container text-white font-label-bold text-[12px] py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 uppercase cursor-pointer">
+                      Rent {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(movie.rentalPrice || movie.price || 50000)}
                     </button>
                   </div>
                 </div>

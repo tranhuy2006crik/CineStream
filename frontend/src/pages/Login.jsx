@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
-import { auth, googleProvider, facebookProvider } from '../config/firebase';
+import useAuth from '../context/AuthContext';
+import { auth, googleProvider, facebookProvider, hasFirebaseConfig } from '../config/firebase';
 import { signInWithPopup } from 'firebase/auth';
 
 const translations = {
@@ -158,8 +159,14 @@ export default function Login() {
   
   const navigate = useNavigate();
   const location = useLocation();
+  const { login: authLogin, setProfile: authSetProfile, updateUser } = useAuth();
 
   const handleSocialLogin = async (provider) => {
+    if (!hasFirebaseConfig || !auth || !provider) {
+      setError('Social login is not available until Firebase is configured in the frontend environment.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -168,7 +175,7 @@ export default function Login() {
       const idToken = await result.user.getIdToken();
 
       // Send token to backend
-      const response = await fetch('http://localhost:5000/api/auth/social-login', {
+      const response = await fetch('/api/auth/social-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken })
@@ -177,15 +184,9 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data));
-        
-        if (data.profiles && data.profiles.length > 0) {
-          localStorage.setItem('activeProfile', JSON.stringify(data.profiles[0]));
-        } else {
-          // Fallback profile if none returned
-          localStorage.setItem('activeProfile', JSON.stringify({ name: data.email.split('@')[0], avatar: 'https://via.placeholder.com/150' }));
-        }
+        const userData = { _id: data._id, email: data.email, role: data.role, profiles: data.profiles };
+        const profile = data.profiles?.[0] || { name: data.email.split('@')[0], avatar: 'https://via.placeholder.com/150' };
+        authLogin(userData, data.token, profile);
 
         const from = location.state?.from?.pathname || "/";
         navigate(from, { replace: true });
@@ -273,7 +274,7 @@ export default function Login() {
     const endpoint = isSignUp ? '/api/auth/register' : '/api/auth/login';
 
     try {
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -287,9 +288,8 @@ export default function Login() {
         throw new Error(data.message || 'Something went wrong');
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({ _id: data._id, email: data.email, role: data.role, profiles: data.profiles }));
-      
+      const userData = { _id: data._id, email: data.email, role: data.role, profiles: data.profiles };
+      authLogin(userData, data.token);
       setUser(data);
       
       if (data.role === 'admin' || data.role === 'staff') {
@@ -306,7 +306,7 @@ export default function Login() {
   };
 
   const handleSelectProfile = (profile) => {
-    localStorage.setItem('activeProfile', JSON.stringify(profile));
+    authSetProfile(profile);
     navigate('/');
   };
 
@@ -326,7 +326,7 @@ export default function Login() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
+      const response = await fetch('/api/auth/profile', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -416,13 +416,14 @@ export default function Login() {
       {/* Header */}
       <header className="relative z-20 w-full px-4 sm:px-8 md:px-16 py-6">
         <div className="max-w-[1440px] mx-auto flex items-center justify-between">
-          <a
-            className="inline-block font-display-lg text-[28px] sm:text-[36px] font-black text-primary-container uppercase tracking-tighter"
-            href="#"
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-block font-display-lg text-[28px] sm:text-[36px] font-black text-primary-container uppercase tracking-tighter cursor-pointer"
             style={{ textShadow: '0 0 20px rgba(229, 9, 20, 0.6), 0 0 40px rgba(229, 9, 20, 0.3)' }}
           >
             CINESTREAM
-          </a>
+          </button>
           {/* Language Toggle Globe */}
           <button
             onClick={handleLangSwitch}
@@ -520,7 +521,7 @@ export default function Login() {
               <button 
                 type="button" 
                 onClick={() => handleSocialLogin(googleProvider)}
-                disabled={loading}
+                disabled={loading || !hasFirebaseConfig}
                 className="w-full flex items-center justify-center space-x-2 bg-white/10 hover:bg-white/20 text-on-surface p-3 rounded-[4px] font-semibold transition-colors disabled:opacity-50"
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -534,7 +535,7 @@ export default function Login() {
               <button 
                 type="button" 
                 onClick={() => handleSocialLogin(facebookProvider)}
-                disabled={loading}
+                disabled={loading || !hasFirebaseConfig}
                 className="w-full flex items-center justify-center space-x-2 bg-white/10 hover:bg-white/20 text-on-surface p-3 rounded-[4px] font-semibold transition-colors disabled:opacity-50"
               >
                 <svg className="w-5 h-5 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

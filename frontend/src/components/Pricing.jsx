@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
-import { Loader2 } from 'lucide-react';
+import useAuth from '../hooks/useAuth';
+import { Loader2, RefreshCw, CreditCard } from 'lucide-react';
 
 const translations = {
   en: {
@@ -23,7 +25,11 @@ const translations = {
     screen4: '4 Screens simultaneously',
     early: 'Cinema Early Access',
     noAds: 'Zero Ads & Offline Mode',
-    goVip: 'Go VIP'
+    goVip: 'Go VIP',
+    buy: 'Subscribe',
+    pleaseLogin: 'Please login first to subscribe',
+    month: 'mo',
+    processing: 'Processing...'
   },
   vi: {
     title: 'Chọn Gói Dịch Vụ',
@@ -45,15 +51,23 @@ const translations = {
     screen4: 'Xem trên 4 thiết bị',
     early: 'Xem sớm tại rạp',
     noAds: 'Không quảng cáo & Xem ngoại tuyến',
-    goVip: 'Lên VIP'
+    goVip: 'Lên VIP',
+    buy: 'Đăng ký ngay',
+    pleaseLogin: 'Vui lòng đăng nhập để đăng ký gói',
+    month: 'tháng',
+    processing: 'Đang xử lý...'
   }
 };
 
-export default function Pricing() {
+export default function Pricing({ standalone = false }) {
+  const navigate = useNavigate();
+  const { user, token } = useAuth();
   const { lang } = useLang();
   const t = translations[lang];
   const [packages, setPackages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
+  const [toast, setToast] = useState('');
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -70,8 +84,66 @@ export default function Pricing() {
     fetchPackages();
   }, []);
 
+  const handleSubscribe = async (pkg) => {
+    if (!token) {
+      setToast(t.pleaseLogin);
+      setTimeout(() => setToast(''), 3500);
+      setTimeout(() => navigate('/login'), 800);
+      return;
+    }
+    try {
+      setProcessingId(pkg._id);
+      const res = await fetch('/api/bookings/packages/create_payment_url', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ packageId: pkg._id })
+      });
+      const data = await res.json();
+      if (data.paymentUrl) {
+        localStorage.setItem('pending_package', JSON.stringify({
+          packageId: pkg._id,
+          name: pkg.name,
+          at: Date.now()
+        }));
+        window.location.href = data.paymentUrl;
+      } else {
+        throw new Error(data.message || 'Error');
+      }
+    } catch (err) {
+      console.error(err);
+      setToast(err.message || (lang === 'vi' ? 'Lỗi trong quá trình tạo đơn. Vui lòng thử lại.' : 'Error creating order, please retry.'));
+      setTimeout(() => setToast(''), 4000);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const fmtPrice = (v) => {
+    try {
+      return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v) || 0);
+    } catch (e) { return v; }
+  };
+
   return (
-    <section className="py-24 bg-background reveal">
+    <section className={`${standalone ? 'min-h-screen' : ''} py-24 bg-background reveal relative`}>
+      {toast && (
+        <div className="fixed top-4 right-4 z-[9999] bg-danger text-white px-4 py-3 rounded-lg shadow-xl border border-danger/30 flex items-center gap-2 animate-[fadeIn_0.2s_ease]">
+          <RefreshCw className="animate-spin" size={18} /> {toast}
+        </div>
+      )}
+
+      {standalone && (
+        <div className="px-margin-mobile md:px-margin-desktop max-w-6xl mx-auto mb-6">
+          <button onClick={() => navigate(-1)}
+            className="text-on-surface-variant hover:text-on-surface transition-colors font-body-base cursor-pointer">
+            ← {lang === 'vi' ? 'Quay lại' : 'Back'}
+          </button>
+        </div>
+      )}
+
       <div className="px-margin-mobile md:px-margin-desktop text-center mb-stack-lg">
         <h2 className="font-display-lg text-display-lg-mobile md:text-headline-md text-on-surface">{t.title}</h2>
         <p className="font-body-base text-on-surface-variant">{t.subtitle}</p>
@@ -89,6 +161,11 @@ export default function Pricing() {
         <div className="px-margin-mobile md:px-margin-desktop grid grid-cols-1 md:grid-cols-3 gap-gutter max-w-6xl mx-auto items-center">
           {packages.map((pkg, index) => {
             const isPopular = pkg.isPopular;
+            const isProcessing = processingId === pkg._id;
+            const durationDays = Number(pkg.durationDays) || 30;
+            const durationLabel = durationDays === 30
+              ? `/${t.month}`
+              : `/${durationDays} ${lang === 'vi' ? 'ngày' : 'days'}`;
             
             return (
               <div 
@@ -111,8 +188,8 @@ export default function Pricing() {
                 </div>
                 
                 <div className="mb-stack-lg">
-                  <span className="text-4xl font-black text-on-surface">${pkg.price}</span>
-                  <span className="text-on-surface-variant">/mo</span>
+                  <span className="text-4xl font-black text-on-surface">{fmtPrice(pkg.price)}</span>
+                  <span className="text-on-surface-variant">{durationLabel}</span>
                 </div>
                 
                 <ul className="flex-grow space-y-4 mb-stack-lg">
@@ -125,13 +202,19 @@ export default function Pricing() {
                 </ul>
                 
                 <button 
-                  className={`w-full py-3 rounded-lg font-label-bold transition-all ${
+                  onClick={() => handleSubscribe(pkg)}
+                  disabled={isProcessing}
+                  className={`w-full py-3 rounded-lg font-label-bold transition-all flex items-center justify-center gap-2 ${
                     isPopular 
-                      ? 'bg-primary-container text-on-primary-container shadow-lg hover:shadow-primary-container/20 cursor-pointer' 
-                      : 'border border-outline-variant text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-transparent cursor-pointer'
+                      ? 'bg-primary-container text-on-primary-container shadow-lg hover:shadow-primary-container/20 cursor-pointer disabled:opacity-70' 
+                      : 'border border-outline-variant text-on-surface group-hover:bg-primary-container group-hover:text-on-primary-container group-hover:border-transparent cursor-pointer disabled:opacity-70'
                   }`}
                 >
-                  Mua {pkg.name}
+                  {isProcessing ? (
+                    <><RefreshCw size={18} className="animate-spin" /> {t.processing}</>
+                  ) : (
+                    <><CreditCard size={18} /> {t.buy} {pkg.name}</>
+                  )}
                 </button>
               </div>
             );

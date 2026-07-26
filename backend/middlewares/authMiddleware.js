@@ -15,6 +15,9 @@ export const protect = async (req, res, next) => {
       if (!req.user) {
         return res.status(401).json({ message: 'Not authorized, user not found' });
       }
+
+      // Ensure id is always available (some controllers use req.user.id)
+      req.user.id = req.user._id.toString();
       
       return next();
     } catch (error) {

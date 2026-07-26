@@ -103,7 +103,7 @@ export default function ImmersiveSection() {
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="py-24 relative overflow-hidden bg-surface-container-lowest reveal"
+      className="py-24 relative overflow-hidden bg-surface-container-lowest animate-fade-in"
     >
       <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-none opacity-40 w-full h-full"></canvas>
       <div className="px-margin-mobile md:px-margin-desktop flex flex-col md:flex-row items-center gap-stack-lg relative z-10">

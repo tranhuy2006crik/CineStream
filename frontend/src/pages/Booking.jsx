@@ -170,7 +170,7 @@ export default function Booking() {
         const moviesData = await moviesRes.json();
         const showtimesData = await showtimesRes.json();
         
-        setMovies(Array.isArray(moviesData) ? moviesData : []);
+        setMovies(Array.isArray(moviesData.movies) ? moviesData.movies : []);
         setShowtimes(Array.isArray(showtimesData) ? showtimesData : []);
       } catch (err) {
         console.error(err);

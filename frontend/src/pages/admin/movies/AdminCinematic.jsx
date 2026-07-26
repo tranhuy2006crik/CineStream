@@ -7,30 +7,9 @@ export default function AdminCinematic() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { setPageHeader } = useOutletContext();
-
-  useEffect(() => {
-    setPageHeader({
-      title: 'Cinematic Movies',
-      description: 'Manage cinema releases and showtimes.',
-      rightContent: (
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-primary-container text-on-primary-container font-bold px-4 py-2 rounded-xl flex items-center shadow-lg hover:bg-primary-container/80 transition-all cursor-pointer text-sm"
-        >
-          <Plus size={16} className="mr-2" />
-          Add New Movie
-        </button>
-      )
-    });
-    return () => setPageHeader({ title: '', description: '', backLink: null, rightContent: null });
-  }, [setPageHeader, setIsModalOpen]);
-
-  // Filters
+  const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-
-  // Form State
   const [formData, setFormData] = useState({
     title: '',
     director: '',
@@ -44,9 +23,36 @@ export default function AdminCinematic() {
     rentalPrice: '',
     vodVideoUrl: ''
   });
-  
   const [posterFile, setPosterFile] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
+  const { setPageHeader } = useOutletContext();
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'Cinematic Movies',
+      description: 'Manage cinema releases and showtimes.',
+      rightContent: (
+        <button 
+          onClick={() => {
+            setEditingId(null);
+            setFormData({
+              title: '', director: '', duration: '', releaseDate: '', description: '',
+              status: 'Upcoming', trailerUrl: '', isVOD: false, vodTier: 'none',
+              rentalPrice: '', vodVideoUrl: ''
+            });
+            setPosterFile(null);
+            setBannerFile(null);
+            setIsModalOpen(true);
+          }}
+          className="bg-primary-container text-on-primary-container font-bold px-4 py-2 rounded-xl flex items-center shadow-lg hover:bg-primary-container/80 transition-all cursor-pointer text-sm"
+        >
+          <Plus size={16} className="mr-2" />
+          Add New Movie
+        </button>
+      )
+    });
+    return () => setPageHeader({ title: '', description: '', backLink: null, rightContent: null });
+  }, [setPageHeader, setIsModalOpen]);
 
   const fetchMovies = async () => {
     setIsLoading(true);
@@ -62,7 +68,7 @@ export default function AdminCinematic() {
       }
       const res = await fetch(url);
       const data = await res.json();
-      setMovies(data);
+      setMovies(data.movies || data || []);
     } catch (error) {
       console.error('Error fetching movies:', error);
     } finally {
@@ -89,6 +95,26 @@ export default function AdminCinematic() {
     if (type === 'banner') setBannerFile(file);
   };
 
+  const handleEdit = (movie) => {
+    setEditingId(movie._id);
+    setFormData({
+      title: movie.title || '',
+      director: movie.director || '',
+      duration: movie.duration || '',
+      releaseDate: movie.releaseDate ? new Date(movie.releaseDate).toISOString().split('T')[0] : '',
+      description: movie.description || '',
+      status: movie.status || 'Upcoming',
+      trailerUrl: movie.trailerUrl || '',
+      isVOD: movie.isVOD || false,
+      vodTier: movie.vodTier || 'none',
+      rentalPrice: movie.rentalPrice || '',
+      vodVideoUrl: movie.vodVideoUrl || ''
+    });
+    setPosterFile(null);
+    setBannerFile(null);
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -103,20 +129,25 @@ export default function AdminCinematic() {
       if (bannerFile) data.append('banner', bannerFile);
 
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/movies', {
-        method: 'POST',
+      const url = editingId 
+        ? `http://localhost:5000/api/movies/${editingId}` 
+        : 'http://localhost:5000/api/movies';
+      const method = editingId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Authorization': `Bearer ${token}`
         },
-        body: data // FormData does not need Content-Type header
+        body: data
       });
 
       if (!res.ok) {
-        throw new Error('Failed to save movie');
+        throw new Error(editingId ? 'Failed to update movie' : 'Failed to save movie');
       }
 
-      // Reset & Close
       setIsModalOpen(false);
+      setEditingId(null);
       setFormData({
         title: '', director: '', duration: '', releaseDate: '', description: '',
         status: 'Upcoming', trailerUrl: '', isVOD: false, vodTier: 'none',
@@ -245,7 +276,11 @@ export default function AdminCinematic() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 bg-black/30 hover:bg-white/10 rounded-lg text-blue-400 transition-colors cursor-pointer" title="Edit">
+                            <button 
+                              onClick={() => handleEdit(movie)}
+                              className="p-2 bg-black/30 hover:bg-white/10 rounded-lg text-blue-400 transition-colors cursor-pointer" 
+                              title="Edit"
+                            >
                               <Edit2 size={16} />
                             </button>
                             <button 
@@ -276,7 +311,7 @@ export default function AdminCinematic() {
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
           <div className="bg-surface-container-high border border-white/10 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative shadow-2xl z-10 animate-scale-up">
             <div className="sticky top-0 bg-surface-container-high/95 backdrop-blur-md px-6 py-4 border-b border-white/5 flex justify-between items-center z-20">
-              <h2 className="text-xl font-bold text-on-surface">Add New Movie</h2>
+              <h2 className="text-xl font-bold text-on-surface">{editingId ? 'Edit Movie' : 'Add New Movie'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="p-2 text-on-surface-variant hover:text-on-surface hover:bg-white/5 rounded-full transition-colors cursor-pointer">
                 <X size={20} />
               </button>
@@ -370,7 +405,7 @@ export default function AdminCinematic() {
                   disabled={isSubmitting}
                   className="px-5 py-2.5 text-sm font-bold text-on-primary-container bg-primary-container hover:bg-primary-container/80 rounded-lg transition-colors shadow-[0_0_10px_rgba(229,9,20,0.3)] cursor-pointer disabled:opacity-50 flex items-center"
                 >
-                  {isSubmitting ? <><Loader2 size={18} className="animate-spin mr-2" /> Saving...</> : 'Save Movie'}
+                  {isSubmitting ? <><Loader2 size={18} className="animate-spin mr-2" /> Saving...</> : (editingId ? 'Update Movie' : 'Save Movie')}
                 </button>
               </div>
             </form>

@@ -66,7 +66,7 @@ export default function AdminVOD() {
       }
       const res = await fetch(url);
       const data = await res.json();
-      setMovies(data);
+      setMovies(data.movies || data || []);
     } catch (error) {
       console.error('Error fetching movies:', error);
     } finally {

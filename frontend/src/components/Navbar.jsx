@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useLang } from '../context/LanguageContext';
+import useAuth from '../context/AuthContext';
+import useDebounce from '../hooks/useDebounce';
+import useLocalStorage from '../hooks/useLocalStorage';
 
 const translations = {
   en: {
@@ -9,8 +12,12 @@ const translations = {
     vod: 'VOD',
     activeProfile: 'Active Profile',
     switchProfile: 'Switch Profile',
+    viewTickets: 'View My Tickets',
     signOut: 'Sign Out',
     login: 'Sign in',
+    searchPlaceholder: 'Search movies...',
+    recentSearches: 'Recent Searches',
+    clearHistory: 'Clear History'
   },
   vi: {
     movies: 'Phim',
@@ -18,21 +25,36 @@ const translations = {
     vod: 'Thuê phim',
     activeProfile: 'Hồ sơ hiện tại',
     switchProfile: 'Đổi hồ sơ',
+    viewTickets: 'Xem vé của tôi',
     signOut: 'Đăng xuất',
     login: 'Đăng nhập',
+    searchPlaceholder: 'Tìm kiếm phim...',
+    recentSearches: 'Tìm kiếm gần đây',
+    clearHistory: 'Xóa lịch sử'
   }
 };
 
-export default function Navbar() {
+export default function Navbar({ onSearch }) {
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedSearchMovie, setSelectedSearchMovie] = useState(null);
+  const [searchHistory, setSearchHistory, clearSearchHistory] = useLocalStorage('searchHistory', []);
   const [activeProfile, setActiveProfile] = useState(null);
   const dropdownRef = useRef(null);
+  const searchRef = useRef(null);
   const lastScrollY = useRef(0);
   const navigate = useNavigate();
+  const location = useLocation();
   const { lang, toggleLang } = useLang();
+  const { activeProfile: authProfile, logout, setProfile } = useAuth();
   const t = translations[lang];
+
+  // Use debounced search query for API calls
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -48,16 +70,19 @@ export default function Navbar() {
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Load active profile from storage
-    const profile = localStorage.getItem('activeProfile');
-    if (profile) {
-      setActiveProfile(JSON.parse(profile));
+    if (authProfile) {
+      setActiveProfile(authProfile);
+    } else {
+      const profile = localStorage.getItem('activeProfile');
+      if (profile) setActiveProfile(JSON.parse(profile));
     }
 
-    // Close dropdown on click outside
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setSearchOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -66,17 +91,71 @@ export default function Navbar() {
       window.removeEventListener('scroll', handleScroll);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [authProfile]);
+
+  useEffect(() => {
+    if (debouncedSearchQuery.trim()) {
+      fetch(`/api/movies?search=${encodeURIComponent(debouncedSearchQuery)}&limit=5`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && Array.isArray(data.movies)) {
+            setSearchResults(data.movies);
+          } else if (Array.isArray(data)) {
+            setSearchResults(data);
+          }
+        })
+        .catch(err => console.error('Error searching movies:', err));
+    } else {
+      setSearchResults([]);
+    }
+  }, [debouncedSearchQuery]);
+
+  // Save search to history (with cache)
+  const saveSearchToHistory = (query) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return;
+
+    // Remove duplicate and add to top, keep only last 10
+    let newHistory = [trimmedQuery, ...searchHistory.filter(item => item !== trimmedQuery)];
+    newHistory = newHistory.slice(0, 10);
+    setSearchHistory(newHistory);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      saveSearchToHistory(searchQuery);
+      if (onSearch) {
+        onSearch({ search: searchQuery });
+      } else {
+        const params = new URLSearchParams(location.search);
+        params.set('search', searchQuery);
+        navigate(`/?${params.toString()}`);
+      }
+      setSearchOpen(false);
+      setSearchResults([]);
+      setSelectedSearchMovie(null);
+    }
+  };
+
+  const handleHistoryClick = (query) => {
+    setSearchQuery(query);
+    setSelectedSearchMovie(null);
+    saveSearchToHistory(query);
+    if (onSearch) {
+      onSearch({ search: query });
+    }
+    setSearchOpen(false);
+    setSearchResults([]);
+  };
 
   const handleSwitchProfile = () => {
-    localStorage.removeItem('activeProfile');
+    setProfile(null);
     navigate('/login');
   };
 
   const handleSignOut = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('activeProfile');
+    logout();
     navigate('/login');
   };
 
@@ -89,6 +168,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-stack-lg font-body-base text-body-base">
           <NavLink 
             to="/" 
+            onClick={() => { if (onSearch) onSearch({}); }}
             className={({ isActive }) => isActive ? "text-on-surface font-bold border-b-2 border-primary-container pb-1 transition-all duration-300" : "text-on-surface-variant hover:text-on-surface transition-colors pb-1"}
           >
             {t.movies}
@@ -107,13 +187,127 @@ export default function Navbar() {
           </NavLink>
         </div>
         <div className="flex items-center gap-stack-md relative" ref={dropdownRef}>
-          <button className="p-2 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">
-            <span className="material-symbols-outlined">search</span>
-          </button>
+          <div className="relative" ref={searchRef}>
+            {searchOpen ? (
+              <form onSubmit={handleSearchSubmit} className="flex items-center bg-surface-container-highest rounded-full px-4 py-2 border border-white/10 w-64 md:w-80">
+                <span className="material-symbols-outlined text-on-surface-variant text-xl">search</span>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="bg-transparent border-none outline-none text-on-surface ml-2 w-full text-sm"
+                  autoFocus
+                />
+                <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults([]); setSelectedSearchMovie(null); }} className="text-on-surface-variant hover:text-on-surface">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </form>
+            ) : (
+              <button onClick={() => setSearchOpen(true)} className="p-2 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">
+                <span className="material-symbols-outlined">search</span>
+              </button>
+            )}
+
+            {searchOpen && (searchResults.length > 0 || searchHistory.length > 0 || selectedSearchMovie) && (
+              <div className="absolute top-full mt-2 right-0 w-80 bg-surface-container-highest border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-[calc(100vh-150px)] z-50">
+                {selectedSearchMovie ? (
+                  <div className="p-4 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <img 
+                        src={selectedSearchMovie.poster || "https://lh3.googleusercontent.com/aida-public/AB6AXuDDYWxPR00xg0VZmIsE8rB6Szb_aRK898t-t-FZcFs0D0gk5bKTvms3Sfs2oge425J6DCCoSRBvU65IFAklDS3eRkN0x5YW2L9RCBFIGEZfVKXrl3mD3xJPuZpCG3lRLhmRh_yxqDjduk9igar8bi0p2MhuYz8VnYqynM1qGfNDVB9XZ3g7shbb1d54gGe_UCfuQw1SxhE-sG_zMlC7vqBxuyvPiCOOV_XeJhoIkjVrSQi1efy5JAm8am7L7qmz746UcPDugIMcn7o"}
+                        alt={selectedSearchMovie.title}
+                        className="w-14 h-20 object-cover rounded-lg"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-on-surface font-semibold truncate">{selectedSearchMovie.title}</p>
+                        <p className="text-on-surface-variant text-xs">{selectedSearchMovie.releaseYear || ''} • {selectedSearchMovie.status}</p>
+                        <p className="text-on-surface-variant text-xs mt-1 truncate">{selectedSearchMovie.genres?.join(', ')}</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3">
+                      <button
+                        onClick={() => {
+                          setSearchOpen(false);
+                          navigate(`/booking?movie=${selectedSearchMovie._id}`);
+                        }}
+                        className="w-full px-4 py-3 rounded-full bg-primary-container text-on-primary-container font-semibold hover:bg-primary-container/90 transition"
+                      >
+                        Book Ticket
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSearchOpen(false);
+                          navigate(`/vod/${selectedSearchMovie._id}`);
+                        }}
+                        className="w-full px-4 py-3 rounded-full bg-surface-container text-on-surface font-semibold border border-white/10 hover:bg-white/5 transition"
+                      >
+                        VOD
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setSelectedSearchMovie(null)}
+                      className="w-full text-sm text-on-surface-variant hover:text-on-surface transition text-left"
+                    >
+                      Change selection
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {searchHistory.length > 0 && searchResults.length === 0 && (
+                      <div className="px-4 py-3 border-b border-white/5">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-on-surface-variant text-xs uppercase tracking-wider">{t.recentSearches}</span>
+                          <button onClick={clearSearchHistory} className="text-primary-container text-xs hover:underline">
+                            {t.clearHistory}
+                          </button>
+                        </div>
+                        {searchHistory.map((query, index) => (
+                          <div 
+                            key={index}
+                            onClick={() => handleHistoryClick(query)}
+                            className="flex items-center gap-2 px-2 py-2 hover:bg-white/5 cursor-pointer transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-on-surface-variant text-sm">history</span>
+                            <span className="text-on-surface text-sm truncate">{query}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.length > 0 && (
+                      <div className="p-2">
+                        {searchResults.map((movie) => (
+                          <div 
+                            key={movie._id} 
+                            className="flex items-center gap-3 px-2 py-2 hover:bg-white/5 cursor-pointer transition-colors rounded-lg"
+                            onClick={() => {
+                              setSearchQuery(movie.title);
+                              setSelectedSearchMovie(movie);
+                              saveSearchToHistory(movie.title);
+                            }}
+                          >
+                            <img 
+                              src={movie.poster || "https://lh3.googleusercontent.com/aida-public/AB6AXuDDYWxPR00xg0VZmIsE8rB6Szb_aRK898t-t-FZcFs0D0gk5bKTvms3Sfs2oge425J6DCCoSRBvU65IFAklDS3eRkN0x5YW2L9RCBFIGEZfVKXrl3mD3xJPuZpCG3lRLhmRh_yxqDjduk9igar8bi0p2MhuYz8VnYqynM1qGfNDVB9XZ3g7shbb1d54gGe_UCfuQw1SxhE-sG_zMlC7vqBxuyvPiCOOV_XeJhoIkjVrSQi1efy5JAm8am7L7qmz746UcPDugIMcn7o"}
+                              alt={movie.title}
+                              className="w-12 h-16 object-cover rounded-lg"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-on-surface font-semibold truncate">{movie.title}</p>
+                              <p className="text-on-surface-variant text-xs">{movie.releaseYear || ''} • {movie.status}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           <button className="p-2 text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">
             <span className="material-symbols-outlined">notifications</span>
           </button>
-          {/* Language Toggle */}
           <button
             onClick={toggleLang}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-white/15 hover:border-white/30 hover:bg-white/5 transition-all duration-300 cursor-pointer group"
@@ -138,7 +332,7 @@ export default function Navbar() {
 
               {dropdownOpen && (
                 <div 
-                  className="absolute right-0 mt-3 w-56 rounded-lg shadow-2xl border border-white/10 overflow-hidden transform origin-top-right transition-all z-[100]"
+                  className="absolute right-0 mt-3 w-56 rounded-lg shadow-2xl border border-white/10 overflow-hidden transform origin-top-right transition-all z-100"
                   style={{ backgroundColor: 'rgba(20, 20, 20, 0.95)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)' }}
                 >
                   <div className="px-4 py-3 border-b border-white/5">
@@ -146,6 +340,13 @@ export default function Navbar() {
                     <p className="text-sm font-bold text-on-surface mt-0.5 truncate">{activeProfile.name}</p>
                   </div>
                   <div className="py-1">
+                    <button 
+                      onClick={() => { setDropdownOpen(false); navigate('/my-tickets'); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-on-surface hover:bg-white/5 transition-colors text-left cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">confirmation_number</span>
+                      {t.viewTickets}
+                    </button>
                     <button 
                       onClick={handleSwitchProfile}
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm text-on-surface hover:bg-white/5 transition-colors text-left cursor-pointer"

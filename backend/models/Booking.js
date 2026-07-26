@@ -15,10 +15,24 @@ const bookingSchema = new mongoose.Schema({
     type: String, // e.g. 'A1', 'A2'
     required: true
   }],
+  combos: [{
+    combo: { type: mongoose.Schema.Types.ObjectId, ref: 'Combo' },
+    name: String,
+    price: Number,
+    quantity: { type: Number, default: 1 }
+  }],
+  subtotal: { type: Number, default: 0 },
+  comboTotal: { type: Number, default: 0 },
+  serviceFee: { type: Number, default: 0 },
+  voucherCode: { type: String },
+  voucherDiscount: { type: Number, default: 0 },
   totalAmount: {
     type: Number,
     required: true
   },
+  checkedIn: { type: Boolean, default: false },
+  checkedInAt: { type: Date },
+  checkedInBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   paymentMethod: {
     type: String,
     enum: ['VNPay', 'Momo'],

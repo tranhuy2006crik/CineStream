@@ -1,22 +1,37 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, FacebookAuthProvider } from "firebase/auth";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "dummy-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "dummy-auth-domain",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "dummy-project-id",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "dummy-storage-bucket",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "dummy-sender-id",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "dummy-app-id"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+const hasFirebaseConfig = Object.values(firebaseConfig).every(Boolean);
 
-// Providers
-const googleProvider = new GoogleAuthProvider();
-const facebookProvider = new FacebookAuthProvider();
+let app = null;
+let auth = null;
+let googleProvider = null;
+let facebookProvider = null;
 
-export { auth, googleProvider, facebookProvider };
+if (hasFirebaseConfig) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  googleProvider = new GoogleAuthProvider();
+  facebookProvider = new FacebookAuthProvider();
+  facebookProvider.addScope('email');
+} else {
+  console.warn('Firebase client config is incomplete. Set the VITE_FIREBASE_* variables in the frontend environment to enable Google/Facebook sign-in.');
+}
+
+console.log('Firebase config loaded:', {
+  firebaseConfig,
+  hasFirebaseConfig,
+  appInitialized: !!app,
+  authInitialized: !!auth
+});
+
+export { auth, googleProvider, facebookProvider, hasFirebaseConfig };

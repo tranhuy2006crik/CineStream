@@ -9,10 +9,16 @@ export const getAllCinemas = async (req, res) => {
 
     const cinemas = await Cinema.find(filter).sort({ createdAt: -1 });
     const cinemasWithStats = await Promise.all(cinemas.map(async (cinema) => {
-      const theatersCount = await Theater.countDocuments({ cinemaId: cinema._id });
+      const theaterDocs = await Theater.find({ cinemaId: cinema._id }).sort({ createdAt: 1 });
+      const theaters = theaterDocs.map(t => ({
+        ...t._doc,
+        type: t.theaterType || 'Standard',
+        capacity: (Number(t.rows) || 0) * (Number(t.cols) || 0)
+      }));
       return {
         ...cinema._doc,
-        theatersCount
+        theatersCount: theaters.length,
+        theaters
       };
     }));
     res.status(200).json(cinemasWithStats);
